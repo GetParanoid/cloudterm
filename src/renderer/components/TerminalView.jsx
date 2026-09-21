@@ -404,11 +404,18 @@ function TerminalView({
     /**
      * Put a snippet into the shell.
      *
-     * Pasted rather than written, for the same reason as the clipboard above: a
-     * multi-line snippet has to land in the line editor as one edit instead of
-     * running a line at a time. The Enter that runs it is sent separately,
-     * because a newline *inside* a bracketed paste is literal text and would
-     * sit in the buffer rather than executing.
+     * Pasted rather than written, for the same reason as the clipboard above:
+     * the text goes into the line editor as one edit, and the Enter that runs
+     * it is sent separately.
+     *
+     * A package is a series of lines, and a series cannot go as one paste. A
+     * line break inside a bracketed paste is literal text, so the whole series
+     * would sit in the buffer with no step running; worse, xterm turns each
+     * `\n` into a `\r` on the way out, which readline keeps as a literal `^M`
+     * and the shell then reads as part of the command before it, which is why
+     * a two-step package arrives looking like one mangled line. So each line
+     * is pasted on its own, with the carriage return that runs it sent once
+     * the paste has closed.
      */
     const insertSnippet = useCallback((text, runImmediately) => {
         const term = termRef.current;
@@ -416,8 +423,29 @@ function TerminalView({
 
         // `paste` raises onData, so the snippet follows the same route as
         // typing, including out to every other session when broadcasting.
-        term.paste(text);
-        if (runImmediately) sendInput('\r');
+        const lines = String(text ?? '').split('\n');
+
+        if (lines.length === 1) {
+            term.paste(lines[0]);
+            if (runImmediately) sendInput('\r');
+        } else if (runImmediately) {
+            for (const line of lines) {
+                term.paste(line);
+                sendInput('\r');
+            }
+        } else if (term.modes?.bracketedPasteMode) {
+            // Nothing may run before the user presses Enter, so the series
+            // still goes in as one edit. Bracketed here by hand rather than
+            // through `paste`, only so the line breaks stay line breaks and
+            // the buffer reads as the steps that were written.
+            sendInput(`\x1b[200~${lines.join('\n')}\x1b[201~`);
+        } else {
+            // No bracketed paste on the far side means no line editor able to
+            // hold a series either: the breaks go out as carriage returns and
+            // every step runs. There is nowhere to leave them standing.
+            term.paste(text);
+        }
+
         term.focus();
     }, [sendInput]);
 
