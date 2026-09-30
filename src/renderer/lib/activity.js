@@ -123,6 +123,7 @@ const FIELD_LABELS = {
     legacyAlgorithms: 'legacy algorithms',
     agentPath: 'agent path',
     agentForward: 'agent forwarding',
+    agentKeys: 'agent keys',
     tunnels: 'port forwards',
     monitor: 'monitoring',
     proxyId: 'proxy',

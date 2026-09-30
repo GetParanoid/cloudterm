@@ -6,6 +6,9 @@ import { IS_WINDOWS } from '../lib/platform';
 /** Fingerprints are long; the tail is the part people actually compare. */
 const shortFingerprint = (value) => (value?.length > 26 ? `${value.slice(0, 24)}…` : value || '');
 
+/** OpenSSH's default `MaxAuthTries`: a server stops listening after this many refusals. */
+const SERVER_ATTEMPTS = 6;
+
 function StatusLine({ status }) {
     if (!status) {
         return (
@@ -40,6 +43,100 @@ function StatusLine({ status }) {
                 <span className="text-gray-500 dark:text-gray-400"> via {status.location}</span>
             </span>
         </span>
+    );
+}
+
+/**
+ * The agent's keys, with a tick for the ones this host offers.
+ *
+ * An agent offers every key it holds, and a server counts every refusal: past
+ * six, OpenSSH hangs up with "Too many authentication failures" before the
+ * right key comes round. Ticking keys here is `IdentitiesOnly` for this host.
+ * They are picked by fingerprint, so nothing secret is stored.
+ *
+ * A pick the agent is not holding stays on the list, marked, rather than
+ * quietly disappearing, since the usual reason is a locked password manager
+ * and the pick is still right.
+ */
+function KeyPicker({ identities, picked, onChange }) {
+    const pickedPrints = new Set(picked.map(key => key.fingerprint));
+    const held = new Set(identities.map(identity => identity.fingerprint));
+    const absent = picked.filter(key => !held.has(key.fingerprint));
+
+    const toggle = (identity) => {
+        onChange(pickedPrints.has(identity.fingerprint)
+            ? picked.filter(key => key.fingerprint !== identity.fingerprint)
+            : [...picked, { fingerprint: identity.fingerprint, comment: identity.comment || '' }]);
+    };
+
+    const rows = [
+        ...identities.filter(identity => identity.fingerprint).map(identity => ({ ...identity, absent: false })),
+        ...absent.map(key => ({ ...key, type: '', absent: true })),
+    ];
+
+    if (rows.length === 0) return null;
+
+    return (
+        <div className="flex flex-col gap-1.5 pt-1 border-t border-gray-100 dark:border-neutral-800">
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+                {picked.length === 0
+                    ? 'Tick the keys this host uses to offer only those. None ticked offers every key.'
+                    : 'Only the ticked keys are offered, in the order they were ticked.'}
+            </span>
+
+            <ul className="flex flex-col gap-1">
+                {rows.map(identity => (
+                    <li key={identity.fingerprint} className="flex items-center gap-2 text-xs min-w-0">
+                        <Checkbox
+                            size="sm"
+                            checked={pickedPrints.has(identity.fingerprint)}
+                            onChange={() => toggle(identity)}
+                            aria-label={identity.comment || identity.fingerprint}
+                        />
+                        <button
+                            type="button"
+                            tabIndex={-1}
+                            onClick={() => toggle(identity)}
+                            className="flex items-center gap-2 min-w-0 flex-1 text-left"
+                        >
+                            {identity.absent ? (
+                                <Alert02Icon size={12} strokeWidth={2} className="shrink-0 text-amber-500" />
+                            ) : (
+                                <Key01Icon size={12} strokeWidth={2} className="shrink-0 text-gray-400" />
+                            )}
+                            {identity.type && (
+                                <span className="font-mono text-gray-600 dark:text-gray-400 shrink-0">
+                                    {identity.type}
+                                </span>
+                            )}
+                            {identity.comment && (
+                                <span className="text-gray-500 dark:text-gray-400 truncate">
+                                    {identity.comment}
+                                </span>
+                            )}
+                            {identity.absent && (
+                                <span className="text-amber-600 dark:text-amber-500 shrink-0">
+                                    not in the agent right now
+                                </span>
+                            )}
+                            <span className="ml-auto font-mono text-[10px] text-gray-400 dark:text-neutral-500 shrink-0">
+                                {shortFingerprint(identity.fingerprint)}
+                            </span>
+                        </button>
+                    </li>
+                ))}
+            </ul>
+
+            {picked.length === 0 && identities.length >= SERVER_ATTEMPTS && (
+                <span className="flex items-start gap-2 text-xs text-amber-600 dark:text-amber-500">
+                    <Alert02Icon size={12} strokeWidth={2} className="shrink-0 mt-0.5" />
+                    <span className="min-w-0">
+                        Servers usually stop after {SERVER_ATTEMPTS} attempts, and this agent
+                        holds {identities.length} keys. Tick the key this host uses.
+                    </span>
+                </span>
+            )}
+        </div>
     );
 }
 
@@ -95,7 +192,7 @@ function UnusableKeys({ identities }) {
  * agent is visible here rather than surfacing later as an opaque
  * "All configured authentication methods failed".
  */
-function AgentAuthFields({ agentPath, agentForward, onChange }) {
+function AgentAuthFields({ agentPath, agentForward, agentKeys = [], onChange }) {
     const [status, setStatus] = useState(null);
     const [showPath, setShowPath] = useState(Boolean(agentPath));
 
@@ -129,28 +226,12 @@ function AgentAuthFields({ agentPath, agentForward, onChange }) {
                     </button>
                 </div>
 
-                {status?.available && status.identities?.length > 0 && (
-                    <ul className="flex flex-col gap-1 pt-1 border-t border-gray-100 dark:border-neutral-800">
-                        {status.identities.map((identity, index) => (
-                            <li
-                                key={identity.fingerprint || index}
-                                className="flex items-center gap-2 text-xs min-w-0"
-                            >
-                                <Key01Icon size={12} strokeWidth={2} className="shrink-0 text-gray-400" />
-                                <span className="font-mono text-gray-600 dark:text-gray-400 shrink-0">
-                                    {identity.type}
-                                </span>
-                                {identity.comment && (
-                                    <span className="text-gray-500 dark:text-gray-400 truncate">
-                                        {identity.comment}
-                                    </span>
-                                )}
-                                <span className="ml-auto font-mono text-[10px] text-gray-400 dark:text-neutral-500 shrink-0">
-                                    {shortFingerprint(identity.fingerprint)}
-                                </span>
-                            </li>
-                        ))}
-                    </ul>
+                {status && (status.available || agentKeys.length > 0) && (
+                    <KeyPicker
+                        identities={status.available ? status.identities || [] : []}
+                        picked={agentKeys}
+                        onChange={(next) => onChange('agentKeys', next)}
+                    />
                 )}
 
                 {status?.available && <UnusableKeys identities={status.unusable} />}

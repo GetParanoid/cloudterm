@@ -1,7 +1,7 @@
 const fs = require('fs');
 const net = require('net');
 const crypto = require('crypto');
-const { createAgent } = require('ssh2');
+const { BaseAgent, createAgent } = require('ssh2');
 
 /** Windows OpenSSH exposes its agent as a named pipe rather than a socket. */
 const WINDOWS_OPENSSH_PIPE = '\\\\.\\pipe\\openssh-ssh-agent';
@@ -269,6 +269,67 @@ async function probe(configuredPath) {
     return last;
 }
 
+/* ------------------------------------------------------------------ *
+ * Offering only some of the agent's keys
+ * ------------------------------------------------------------------ */
+
+/**
+ * The agent, showing the server only the keys this host is meant to use.
+ *
+ * ssh2 offers every key an agent holds, in the agent's order, and a server
+ * counts each refusal against `MaxAuthTries` — six by default. An agent holding
+ * more keys than that locks the user out of any host whose key comes late in
+ * the list, as "Too many authentication failures", before the right key is
+ * ever tried. OpenSSH answers this with `IdentitiesOnly` and a public key file;
+ * this is the same thing: keys are picked by fingerprint, the private halves
+ * never leave the agent, and they are offered in the order they were picked.
+ *
+ * Forwarding is not filtered. `getStream` hands over the real agent, which is
+ * what `ssh -A` does with `IdentitiesOnly` set too: the restriction is on what
+ * this login offers, not on what the next hop can see.
+ */
+function filteredAgent(inner, fingerprints) {
+    const wanted = [...new Set(fingerprints)];
+
+    const agent = new class FilteredAgent extends BaseAgent {
+        getIdentities(callback) {
+            inner.getIdentities((error, keys) => {
+                if (error) {
+                    callback(error);
+                    return;
+                }
+
+                const byPrint = new Map();
+                for (const key of keys || []) {
+                    try {
+                        byPrint.set(fingerprint(key.getPublicSSH()), key);
+                    } catch {
+                        // A key that cannot be fingerprinted cannot have been picked.
+                    }
+                }
+
+                callback(null, wanted.map(print => byPrint.get(print)).filter(Boolean));
+            });
+        }
+
+        sign(pubKey, data, options, callback) {
+            if (typeof options === 'function') {
+                inner.sign(pubKey, data, options);
+                return;
+            }
+            inner.sign(pubKey, data, options, callback);
+        }
+    }();
+
+    // Only where the real agent can be forwarded at all; ssh2 checks for the
+    // method rather than calling it blind.
+    if (typeof inner.getStream === 'function') {
+        agent.getStream = (callback) => inner.getStream(callback);
+    }
+
+    return agent;
+}
+
 module.exports = {
     candidatePaths,
     defaultAgentPath,
@@ -276,4 +337,5 @@ module.exports = {
     describeLocation,
     probe,
     rawIdentities,
+    filteredAgent,
 };

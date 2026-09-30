@@ -86,6 +86,8 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
         keychainKeyId: host?.keychainKeyId || '',
         agentPath: host?.agentPath || '',
         agentForward: Boolean(host?.agentForward),
+        // The agent keys this host offers, by fingerprint. Empty offers them all.
+        agentKeys: host?.agentKeys || [],
         legacyAlgorithms: Boolean(host?.legacyAlgorithms),
         // The saved host this one is reached through, by id. Blank is a direct
         // connection, which is almost every host.
@@ -593,6 +595,7 @@ function HostModal({ host, dismiss, onClose, onSave, keys = [], hosts = [], allT
                     <AgentAuthFields
                         agentPath={formData.agentPath}
                         agentForward={formData.agentForward}
+                        agentKeys={formData.agentKeys}
                         onChange={handleChange}
                     />
                 )}
