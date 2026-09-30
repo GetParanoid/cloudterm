@@ -8,6 +8,7 @@ const { normalizeBmc } = require('./bmc-config');
 const { normalizeMonitor, monitorSupport, defaultCheckPort } = require('./monitor-config');
 const { normalizeProxy, describeProxy, MAX_PROXY_HOPS } = require('./proxy-config');
 const { normalizeTags, applyTagEdit, sameTags } = require('./host-tags');
+const { normalizeAgentKeys } = require('./agent-keys');
 const {
     normalizeProtocol,
     normalizeSerial,
@@ -514,6 +515,11 @@ function saveHost(host) {
     // shows tags assumes "prod" is one tag rather than three spellings of it.
     if (record.tags !== undefined) record.tags = normalizeTags(record.tags);
 
+    // The agent keys this host offers. Fingerprints only, but they decide what
+    // is put in front of a server, so a malformed entry is dropped here rather
+    // than offered as nothing at connect time.
+    if (record.agentKeys !== undefined) record.agentKeys = normalizeAgentKeys(record.agentKeys);
+
     // Which transport this host connects over, and the settings that one needs.
     // Normalised on the way in for the same reason as the two above: the serial
     // block is handed more or less straight to a driver, so a malformed record
@@ -875,6 +881,7 @@ function resolveCredentials(hostId) {
     if (!host) return null;
 
     const protocol = normalizeProtocol(host.protocol);
+    const agentKeys = normalizeAgentKeys(host.agentKeys);
 
     const credentials = {
         protocol,
@@ -890,6 +897,10 @@ function resolveCredentials(hostId) {
         // Blank means "auto-detect"; the connection layer resolves it.
         agentPath: host.agentPath || '',
         agentForward: Boolean(host.agentForward),
+        // Empty offers every key the agent holds. The labels are only for
+        // naming the picks when the agent turns out not to hold any of them.
+        agentKeys: agentKeys.map(key => key.fingerprint),
+        agentKeyLabels: agentKeys.map(key => key.comment || key.fingerprint),
         // Not a credential, but it is connect-time host config resolved by id
         // in exactly the same way, and the shell layer already reads this object.
         initCommand: host.initCommand || '',
@@ -1926,6 +1937,7 @@ function importAll(payload, { overwrite = false } = {}) {
                 // A backup is a file a person can edit, so the tag list arrives
                 // as untrusted as one from the editor does.
                 if (record.tags !== undefined) record.tags = normalizeTags(record.tags);
+                if (record.agentKeys !== undefined) record.agentKeys = normalizeAgentKeys(record.agentKeys);
                 return record;
             },
         }),

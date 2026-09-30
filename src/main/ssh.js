@@ -1,5 +1,5 @@
 const { MessageChannelMain } = require('electron');
-const { Client } = require('ssh2');
+const { Client, createAgent } = require('ssh2');
 const store = require('./store');
 const knownHosts = require('./known-hosts');
 const agent = require('./agent');
@@ -172,7 +172,13 @@ function buildConfig(credentials, hostVerifier) {
     if (credentials.authMethod === 'agent') {
         // Resolved against a live agent by the caller; falls back to the
         // first candidate so a direct call still produces something usable.
-        config.agent = credentials.resolvedAgentPath || agent.resolvePath(credentials.agentPath);
+        const agentPath = credentials.resolvedAgentPath || agent.resolvePath(credentials.agentPath);
+        // With keys picked for this host, only those are offered, so a large
+        // agent does not spend the server's attempts on the wrong ones. None
+        // picked keeps the old behaviour: every key, in the agent's order.
+        config.agent = credentials.agentKeys?.length
+            ? agent.filteredAgent(createAgent(agentPath), credentials.agentKeys)
+            : agentPath;
         // ssh2 refuses forwarding unless an agent is configured, which it is here.
         if (credentials.agentForward) config.agentForward = true;
     } else if (credentials.authMethod === 'key') {
@@ -333,6 +339,9 @@ function openRelay(client, next) {
 async function dialHop(credentials, { sock, requestTrust, requestKeyboardInteractive }) {
     const name = credentials.label?.name || credentials.host;
 
+    /** How many agent keys a host with none picked is about to offer. */
+    let agentKeysOffered = 0;
+
     /*
      * An address typed into a picker can arrive without a user name, and SSH
      * has no handshake to start without one: it is sent in the very first
@@ -381,6 +390,23 @@ async function dialHop(credentials, { sock, requestTrust, requestKeyboardInterac
             };
         }
         credentials.resolvedAgentPath = found.path;
+
+        // Keys picked for this host that the agent is not holding right now,
+        // most often because the password manager behind it is locked. Named
+        // here, since offering nothing would come back from the server as a
+        // bare authentication failure.
+        const held = new Set((found.identities || []).map(identity => identity.fingerprint));
+        if (credentials.agentKeys?.length && !credentials.agentKeys.some(print => held.has(print))) {
+            const names = (credentials.agentKeyLabels || credentials.agentKeys).join(', ');
+            return {
+                success: false,
+                message: `None of this host's keys are in the agent (${names}). Is the agent unlocked?`,
+            };
+        }
+
+        // Every key is offered when none are picked, and a server stops
+        // listening after six by default. Kept for the error handler below.
+        if (!credentials.agentKeys?.length) agentKeysOffered = (found.identities || []).length;
     }
 
     /*
@@ -553,7 +579,15 @@ async function dialHop(credentials, { sock, requestTrust, requestKeyboardInterac
         client.on('error', (err) => {
             deadline.clear();
             console.error(`SSH error dialling ${name}:`, err.message);
-            settle({ success: false, message: err.message });
+
+            // The server's own words say what happened, not what to do: the
+            // agent spent its attempts on other keys before reaching this one.
+            let message = err.message;
+            if (agentKeysOffered > 1 && /too many authentication failures/i.test(message)) {
+                message += `. The agent offered ${agentKeysOffered} keys and the server gave up `
+                    + 'before the right one. Choose this host\'s key under Agent in its settings.';
+            }
+            settle({ success: false, message });
         });
 
         client.on('close', () => {
