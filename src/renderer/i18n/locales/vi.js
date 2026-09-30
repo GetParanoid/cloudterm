@@ -394,6 +394,8 @@ export default {
     'settings.terminal.smoothScrollDesc': 'Thời gian để chuyển động cuộn bằng con lăn chuột hoặc '
         + 'bàn di chuột dừng hẳn. Tắt để cuộn theo thao tác ngay lập tức.',
     'settings.terminal.smoothScrollMs': '{value} ms',
+    'settings.terminal.resourceBar': 'Thanh tài nguyên',
+    'settings.terminal.resourceBarDesc': 'Một dải bên dưới mỗi phiên SSH hiển thị CPU, bộ nhớ, mạng, thời gian hoạt động, người dùng đang đăng nhập và dung lượng đĩa của máy chủ, kèm chi tiết khi di chuột. Chỉ dành cho máy Linux; được đọc mỗi 2 giây khi phiên đang hiển thị.',
     'settings.terminal.links': 'Mở liên kết',
     'settings.terminal.linksDesc': 'Một URL in ra trong phiên có thể bấm được và sẽ mở trong trình '
         + 'duyệt. Yêu cầu giữ thêm {modifier} là cách các trình soạn thảo vẫn làm: nó ngăn một cú '

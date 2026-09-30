@@ -26,6 +26,8 @@ import RdpView from './RdpView';
 import BmcView from './BmcView';
 import SearchBar from './terminal/SearchBar';
 import PaneRoute, { DesktopPaneRoute } from './terminal/PaneRoute';
+import ResourceBar from './terminal/ResourceBar';
+import { useResourceStats } from '../hooks/useResourceStats';
 import SnippetPalette from './snippets/SnippetPalette';
 
 // Pane ids that already opened a connection. Guards against React StrictMode's
@@ -997,6 +999,29 @@ function TerminalView({
         }
     }, []);
 
+    /**
+     * The resource bar under the shell: CPU, memory, network, disks.
+     *
+     * Only for an SSH session on something with a /proc to read, and only once
+     * one has landed. It stays up, dimmed, through a drop, because taking it
+     * away would reflow the terminal on every reconnect. It is sampled only
+     * while this pane's shell is actually on screen.
+     */
+    const showResourceBar = Boolean(
+        terminalSettings.resourceBar
+        && (pane?.host?.protocol || 'ssh') === 'ssh'
+        && !sessionless
+        && pane?.host?.os !== 'windows'
+        && viewMode === 'ssh'
+        && everConnected,
+    );
+    const resourceLive = connection.status === 'connected';
+    const resourceStats = useResourceStats({
+        paneId: pane?.id,
+        enabled: showResourceBar && isActive,
+        live: resourceLive,
+    });
+
     if (!pane) return null;
 
     // `label` is the full account, which the status dot carries as its tooltip.
@@ -1781,6 +1806,18 @@ function TerminalView({
                         onUpdateHost={onUpdateHost}
                     />
                 </div>
+            )}
+
+            {/* Last in the column, so it sits under whichever view is showing;
+                it is only ever shown with the shell. */}
+            {showResourceBar && (
+                <ResourceBar
+                    stats={resourceStats.latest}
+                    history={resourceStats.history}
+                    unsupported={resourceStats.unsupported}
+                    hostFallback={pane.host?.host || pane.title}
+                    dimmed={!resourceLive}
+                />
             )}
 
             {/* Floats over the buffer it searches, so the matches stay visible

@@ -73,6 +73,7 @@ export const DEFAULT_TERMINAL_SETTINGS = {
     scrollback: 10000,
     smoothScrollDuration: 0,
     linkActivation: 'click',
+    resourceBar: true,
 };
 
 /**
@@ -164,6 +165,7 @@ export function sanitizeTerminalSettings(raw) {
         next.cursorStyle = source.cursorStyle;
     }
     if (typeof source.cursorBlink === 'boolean') next.cursorBlink = source.cursorBlink;
+    if (typeof source.resourceBar === 'boolean') next.resourceBar = source.resourceBar;
     if (LINK_ACTIVATIONS.some(mode => mode.id === source.linkActivation)) {
         next.linkActivation = source.linkActivation;
     }

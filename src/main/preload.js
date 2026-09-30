@@ -239,6 +239,12 @@ contextBridge.exposeInMainWorld('api', {
         onDisconnected: (callback) => subscribe('ssh-disconnected', callback),
     },
 
+    // The resource bar under an SSH pane. One reading per call; the pane
+    // decides how often to ask.
+    stats: {
+        sample: (tabId) => ipcRenderer.invoke('stats-sample', tabId),
+    },
+
     agent: {
         // `agentPath` blank means "auto-detect"; main resolves it.
         status: (agentPath) => ipcRenderer.invoke('agent-status', agentPath || ''),

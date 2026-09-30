@@ -375,6 +375,8 @@ export default {
     'settings.terminal.smoothScrollDesc': '鼠标滚轮和触控板的滚动需要多长时间才会停稳。'
         + '关闭后，滚动会立即响应操作。',
     'settings.terminal.smoothScrollMs': '{value} 毫秒',
+    'settings.terminal.resourceBar': '资源使用栏',
+    'settings.terminal.resourceBarDesc': '在每个 SSH 会话下方显示服务器的 CPU、内存、网络、运行时间、已登录用户和磁盘空间，悬停可查看详情。仅限 Linux 主机；会话显示时每 2 秒读取一次。',
     'settings.terminal.links': '打开链接',
     'settings.terminal.linksDesc': '会话中打印出的 URL 可以点击，并在浏览器中打开。同时要求按住 {modifier} '
         + '是编辑器的做法：这样一来，原本想点在 URL 下方文字上的点击就不会在会话中途弹出浏览器。',

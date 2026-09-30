@@ -340,6 +340,20 @@ export default function TerminalPage({
                 <SettingRow
                     className={DIVIDED}
                     align="center"
+                    title={t('settings.terminal.resourceBar')}
+                    description={t('settings.terminal.resourceBarDesc')}
+                    control={
+                        <Toggle
+                            checked={terminalSettings.resourceBar}
+                            onChange={(resourceBar) => set({ resourceBar })}
+                            ariaLabel={t('settings.terminal.resourceBar')}
+                        />
+                    }
+                />
+
+                <SettingRow
+                    className={DIVIDED}
+                    align="center"
                     title={t('settings.terminal.reset')}
                     description={isDefault
                         ? t('settings.terminal.resetAlready')

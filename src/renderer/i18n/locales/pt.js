@@ -409,6 +409,8 @@ export default {
     'settings.terminal.smoothScrollDesc': 'Quanto tempo o deslocamento demora a estabilizar depois '
         + 'de usar a roda do rato ou o trackpad. Desligue para que responda de imediato.',
     'settings.terminal.smoothScrollMs': '{value} ms',
+    'settings.terminal.resourceBar': 'Barra de uso de recursos',
+    'settings.terminal.resourceBarDesc': 'Uma faixa sob cada sessão SSH com o CPU, a memória, a rede, o tempo ativo, os utilizadores ligados e o espaço em disco do servidor, com detalhes ao passar o rato. Apenas anfitriões Linux; é lida a cada 2 segundos enquanto a sessão está visível.',
     'settings.terminal.links': 'Abrir ligações',
     'settings.terminal.linksDesc': 'Um URL escrito na sessão é clicável e abre no seu navegador. '
         + 'Exigir também {modifier} é o que os editores fazem: impede que um clique destinado ao '

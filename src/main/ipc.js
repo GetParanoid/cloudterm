@@ -15,6 +15,7 @@ const transfers = require('./transfers');
 const remoteEdit = require('./remote-edit');
 const screenshot = require('./screenshot');
 const tunnels = require('./tunnels');
+const resourceStats = require('./resource-stats');
 const vnc = require('./vnc');
 const bmc = require('./bmc');
 const rdp = require('./rdp');
@@ -243,6 +244,7 @@ function register(getWindow) {
         vnc.cleanup(tabId);
         rdp.cleanup(tabId);
         bmc.cleanup(tabId);
+        resourceStats.cleanup(tabId);
     });
 
     /**
@@ -692,6 +694,7 @@ function register(getWindow) {
 
     handle('ssh-disconnect', (event, tabId) => transport.destroy(tabId));
     handle('ssh-detect-os', (event, tabId) => ssh.detectOS(tabId));
+    handle('stats-sample', (event, tabId) => resourceStats.sample(tabId));
 
     /* ---------------- Serial ports ---------------- */
 

@@ -446,6 +446,10 @@ export default {
     'settings.terminal.smoothScrollDesc': 'How long wheel and trackpad movements take to settle. '
         + 'Turn it off to follow input immediately.',
     'settings.terminal.smoothScrollMs': '{value} ms',
+    'settings.terminal.resourceBar': 'Resource usage bar',
+    'settings.terminal.resourceBarDesc': 'A strip under each SSH session showing the server\'s CPU, memory, '
+        + 'network, uptime, logged-in users and disk space, with details on hover. Linux hosts only; '
+        + 'it is read every 2 seconds while the session is on screen.',
     'settings.terminal.links': 'Opening links',
     'settings.terminal.linksDesc': 'A URL printed in the session is clickable and opens in your '
         + 'browser. Asking for {modifier} as well is what editors do: it stops a click meant for '
