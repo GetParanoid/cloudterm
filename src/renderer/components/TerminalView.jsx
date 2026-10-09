@@ -12,7 +12,8 @@ import { useTransfers } from '../hooks/useTransfers';
 import { useTunnels } from '../hooks/useTunnels';
 import { useSshConnection } from '../hooks/useSshConnection';
 import { toastOptions } from '../lib/toast';
-import { MODIFIER_KEY } from '../lib/platform';
+import { IS_MAC, MODIFIER_KEY } from '../lib/platform';
+import { createTerminalClipboardHandlers } from '../lib/terminal-clipboard';
 import { OsIcon, hostOs } from '../lib/os-icons';
 import { protocolLabel } from '../lib/protocols';
 import SegmentedControl from './ui/SegmentedControl';
@@ -388,20 +389,12 @@ function TerminalView({
     const connectionRef = useRef(connection);
     connectionRef.current = connection;
 
-    /** Copy the terminal selection. Returns false when there is nothing to copy. */
-    const copySelection = useCallback(async () => {
-        const selection = termRef.current?.getSelection();
-        if (!selection) return false;
-        await window.api.clipboard.writeText(selection);
-        return true;
-    }, []);
-
-    const pasteFromClipboard = useCallback(async () => {
-        const text = await window.api.clipboard.readText();
-        // `paste` (not `sendInput`) so bracketed-paste mode is honoured, so pasting
-        // multi-line text into vim or a shell prompt behaves as it should.
-        if (text) termRef.current?.paste(text);
-    }, []);
+    const terminalClipboard = useMemo(() => createTerminalClipboardHandlers({
+        getTerminal: () => termRef.current,
+        clipboard: window.api.clipboard,
+        isMac: IS_MAC,
+        onError: (message) => toast.error(message, toastOptions({ id: 'terminal-clipboard' })),
+    }), []);
 
     /**
      * Put a snippet into the shell.
@@ -684,29 +677,13 @@ function TerminalView({
             // decides whether this keystroke also reaches the other panes.
             term.onData(data => sendInput(data));
 
-            // Ctrl+Shift+C/V. Plain Ctrl+C must stay SIGINT, which is exactly
-            // why terminals put copy on the shifted chord. Returning false
-            // stops xterm forwarding the key to the shell.
+            // Copy selected output with the platform's usual chord. Ctrl+C
+            // without a selection still interrupts; Ctrl+Shift+C always copies.
             term.attachCustomKeyEventHandler((event) => {
+                if (!terminalClipboard.handleKeyEvent(event)) return false;
                 if (event.type !== 'keydown') return true;
                 if (!event.ctrlKey || !event.shiftKey || event.altKey) return true;
 
-                // Returning false only stops xterm's own handling. The
-                // browser still runs its default action for the chord, and
-                // for Ctrl+Shift+V that is a native plain-text paste into
-                // xterm's hidden textarea, which xterm then pastes again.
-                // preventDefault kills that second paste (and keeps the
-                // default menu's Paste and Match Style accelerator quiet).
-                if (event.code === 'KeyC') {
-                    event.preventDefault();
-                    copySelection();
-                    return false;
-                }
-                if (event.code === 'KeyV') {
-                    event.preventDefault();
-                    pasteFromClipboard();
-                    return false;
-                }
                 // Both open a panel that takes DOM focus, so the terminal stops
                 // seeing keys until it is closed and Escape can go back to
                 // meaning what the shell thinks it means.
@@ -974,13 +951,6 @@ function TerminalView({
 
         refreshLogging();
     }, [logging.recording, pane?.id, refreshLogging]);
-
-    // Right-click pastes, the way PuTTY and mintty do. A selection is left
-    // alone. Use Ctrl+Shift+C for that.
-    const handleContextMenu = useCallback((event) => {
-        event.preventDefault();
-        pasteFromClipboard();
-    }, [pasteFromClipboard]);
 
     // Capture just the terminal's rectangle out of the window and hand it to a
     // viewer window. Measured in CSS pixels, which is what capturePage expects.
@@ -1722,7 +1692,7 @@ function TerminalView({
             <div
                 ref={terminalRef}
                 className="flex-1 overflow-hidden p-3"
-                onContextMenu={handleContextMenu}
+                onContextMenu={terminalClipboard.handleContextMenu}
                 style={{
                     backgroundColor: themeConfig.background,
                     display: viewMode === 'ssh' ? 'block' : 'none',
